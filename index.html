@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Model Interface</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.1/signalr.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .upload-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .preview-image {
+            max-width: 300px;
+            max-height: 300px;
+            margin: 10px 0;
+            display: none;
+        }
+        .response-section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            min-height: 100px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #response {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vision Model Interface</h1>
+        
+        <div class="upload-section">
+            <input type="file" id="imageInput" accept="image/*" style="display: none">
+            <button onclick="document.getElementById('imageInput').click()">Choose Image</button>
+            <img id="preview" class="preview-image" alt="Preview">
+        </div>
+
+        <button id="analyzeBtn" disabled onclick="analyzeImage()">Analyze Image</button>
+
+        <div class="response-section">
+            <h3>Model Response:</h3>
+            <div id="response"></div>
+        </div>
+    </div>
+
+    <script>
+        let base64Image = '';
+        const imageInput = document.getElementById('imageInput');
+        const preview = document.getElementById('preview');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const responseDiv = document.getElementById('response');
+
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                    base64Image = e.target.result.split(',')[1];
+                    analyzeBtn.disabled = false;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function analyzeImage() {
+            if (!base64Image) return;
+
+            analyzeBtn.disabled = true;
+            responseDiv.textContent = 'Analyzing...';
+
+            const body = {
+                model: "llama3.2-vision:11b",
+                messages: [{
+                    role: "user",
+                    content: "what is in this image?",
+                    stream: "true",
+                    images: [base64Image]
+                }]
+            };
+
+            try {
+                const response = await fetch('http://localhost:11434/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullMessage = '';
+                responseDiv.textContent = '';
+
+                while (true) {
+                    const {value, done} = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.trim()) {
+                            try {
+                                const jsonResponse = JSON.parse(line);
+                                if (jsonResponse.message && jsonResponse.message.content) {
+                                    fullMessage += jsonResponse.message.content;
+                                    responseDiv.textContent = fullMessage;
+                                }
+                            } catch (e) {
+                                console.error('Error parsing JSON:', e);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                responseDiv.textContent = 'Error: ' + error.message;
+            } finally {
+                analyzeBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
