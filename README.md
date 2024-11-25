@@ -2,7 +2,7 @@
 
 # Prerequistes:
 - Ollama
-- The model from Ollama moddels
+- The model from Ollama model: https://ollama.com/library/llama3.2-vision
 - a nice Video Card with plenty Gigabytes, the more the better
 
 The website code is attached, the only thing you need to do is give it the platform, something Like `NodeJS` will do
